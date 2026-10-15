@@ -1,0 +1,7 @@
+2026-03-01|LECTURE|Valid lecture outside filter|Room 10|Alice
+bad line without separator
+2026-03-02|PRACTICE|Valid practice in filter|Room 11|Bob
+2026-02-30|LECTURE|Bad date|Room 12|Carol
+2026-03-10|EXAM|Valid exam outside filter|Room 13|Dave,Eve
+2026-03-05|CANCELLED|Cancelled in filter|-|-
+2026-13-40|LECTURE|Invalid calendar date|Room 14|Frank

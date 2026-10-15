@@ -94,7 +94,6 @@ private fun Session.typeName(): String =
         is Practice -> SessionType.PRACTICE.name
         is Assessment -> SessionType.EXAM.name
         is Cancellation -> SessionType.CANCELLED.name
-        else -> error("Unknown session implementation")
     }
 
 private fun formatSession(
@@ -109,7 +108,8 @@ private fun formatSession(
 
     return when (session) {
         is Cancellation ->
-            (base + listOf("-", "-")).joinToString(" | ")
+            (base + if (withTeachers) listOf("-", "-") else listOf("-"))
+                .joinToString(" | ")
 
         is Lecture ->
             (base + listOf(session.place) + teachersPart(session.teachers, withTeachers))
@@ -123,7 +123,6 @@ private fun formatSession(
             (base + listOf(session.place) + teachersPart(session.teachers, withTeachers))
                 .joinToString(" | ")
 
-        else -> error("Unknown session implementation")
     }
 }
 

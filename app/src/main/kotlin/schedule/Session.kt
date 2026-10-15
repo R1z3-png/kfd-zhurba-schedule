@@ -29,7 +29,7 @@ private fun requireValidText(value: String, field: String) {
     require(value.none { it.isISOControl() }) {"$field must not contain control characters"}
 }
 
-interface Session {
+sealed interface Session {
     val date: LocalDate
     val topic: String
 }

@@ -1,0 +1,6 @@
+2026-04-01|EXAM|One teacher|Room 20|Alice
+2026-04-02|EXAM|Two teachers|Room 21|Alice,Bob
+2026-04-03|LECTURE|Duplicate teacher|Room 22|Alice,Alice
+2026-04-04|PRACTICE|Dash teacher|Room 23|Alice,-
+2026-04-05|CANCELLED|Bad cancelled location|Room 24|-
+2026-04-06|CANCELLED|Bad cancelled teachers|-|Alice

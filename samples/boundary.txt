@@ -1,0 +1,5 @@
+2026-01-01|LECTURE|First boundary|Room 1|Alice
+2027-01-02|PRACTICE|Outside range|Room 2|Bob
+2026-12-31|EXAM|Last boundary|Room 3|Carol,Dave
+2027-01-01|LECTURE|Outside range|Room 4|Eve
+2026-06-01|CANCELLED|Cancelled lecture|-|-
