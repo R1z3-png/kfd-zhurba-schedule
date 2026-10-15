@@ -4,133 +4,145 @@ import java.time.LocalDate
 import java.time.format.DateTimeParseException
 
 sealed interface SessionParseResult {
-    data class Success(
-        val session: Session,
-    ) : SessionParseResult
+    data class Success(val session: Session) : SessionParseResult
 
-    data class Failure(
-        val lineNumber: Long,
-        val reason: SessionParseFailure,
-    ) : SessionParseResult
-}
-
-enum class TextField {
-    TOPIC,
-    LOCATION,
-    TEACHER,
-}
-
-enum class TextViolation {
-    BLANK,
-    OUTER_WHITESPACE,
-    CONTROL_CHARACTER,
-    MISSING_VALUE,
+    data class Failure(val lineNumber: Long, val reason: SessionParseFailure) : SessionParseResult
 }
 
 sealed interface SessionParseFailure {
-    data object EmptyLine : SessionParseFailure
+    data object NoFieldSeparator : SessionParseFailure
+    data object CancelledLocationMustBeDash : SessionParseFailure
+    data object CancelledTeachersMustBeDash : SessionParseFailure
+    data object ActiveLocationMustNotBeDash : SessionParseFailure
 
-    data class WrongFieldCount(
-        val actual: Int,
-    ) : SessionParseFailure
+    data class WrongFieldCount(val actual: Int) : SessionParseFailure
+    data class BlankField(val field: TextField) : SessionParseFailure
+    data class InvalidDate(val value: String) : SessionParseFailure
 
-    data class InvalidDateFormat(
-        val value: String,
-    ) : SessionParseFailure
 
-    data class InvalidYear(
-        val year: Int,
-    ) : SessionParseFailure
-
-    data class NonexistentDate(
-        val value: String,
-    ) : SessionParseFailure
-
-    data class UnknownType(
-        val value: String,
-    ) : SessionParseFailure
-
-    data class InvalidText(
-        val field: TextField,
-        val violation: TextViolation,
-        val teacherIndex: Int? = null,
-    ) : SessionParseFailure
-
-    data class DuplicateTeacher(
-        val name: String,
-    ) : SessionParseFailure
-
-    data class TooFewTeachers(
+    data class UnknownType(val value: String) : SessionParseFailure
+    data class TooFewDistinctTeachers(
         val minimum: Int,
         val actual: Int,
     ) : SessionParseFailure
+    data class ControlCharacter(val field: TextField, val teacherIndex: Int? = null) :
+        SessionParseFailure
+    data class OuterWhitespace(val field: TextField, val teacherIndex: Int? = null) :
+        SessionParseFailure
+    data class InvalidTeacher(val teacherIndex: Int, val reason: TeacherViolation) :
+        SessionParseFailure
+    data class DuplicateTeacher(val name: String) : SessionParseFailure
+}
 
-    data object CancelledLocationMustBeDash : SessionParseFailure
-    data object CancelledTeachersMustBeDash : SessionParseFailure
+enum class TextField {
+    DATE,
+    TYPE,
+    TOPIC,
+    LOCATION,
+    TEACHERS,
+}
+
+enum class TeacherViolation {
+    BLANK,
+    OUTER_WHITESPACE,
+    CONTROL_CHARACTER,
+    DASH,
 }
 
 private val datePattern = Regex("[0-9]{4}-[0-9]{2}-[0-9]{2}")
 
-fun parseSessionLine(
-    lineNumber: Long,
-    line: String,
-): SessionParseResult {
-    fun reject(reason: SessionParseFailure): SessionParseResult.Failure =
+fun parseSessionLine(lineNumber: Long, line: String): SessionParseResult {
+    fun fail(reason: SessionParseFailure) =
         SessionParseResult.Failure(lineNumber, reason)
-
-    if (line.isEmpty()) {
-        return reject(SessionParseFailure.EmptyLine)
+    if ('|' !in line) {
+        return fail(SessionParseFailure.NoFieldSeparator)
     }
 
-    // split с символьным разделителем сохраняет конечные пустые поля.
     val fields = line.split('|')
-
     if (fields.size != 5) {
-        return reject(
-            SessionParseFailure.WrongFieldCount(actual = fields.size)
-        )
+        return fail(SessionParseFailure.WrongFieldCount(fields.size))
     }
 
     val (dateText, typeText, topic, location, teachersText) = fields
+    val blankField = sequenceOf(TextField.DATE to dateText,
+        TextField.TYPE to typeText,
+        TextField.TOPIC to topic,
+        TextField.LOCATION to location,
+        TextField.TEACHERS to teachersText,
+    ).firstOrNull { (_, value) -> value.isBlank() }
+
+    if (blankField != null) {
+        return fail(SessionParseFailure.BlankField(blankField.first))
+    }
 
     if (!datePattern.matches(dateText)) {
-        return reject(
-            SessionParseFailure.InvalidDateFormat(dateText)
-        )
+        return fail(SessionParseFailure.InvalidDate(dateText))
     }
 
     val year = dateText.substring(0, 4).toInt()
-
     if (year !in 1..9999) {
-        return reject(SessionParseFailure.InvalidYear(year))
+        return fail(SessionParseFailure.InvalidDate(dateText))
     }
 
     val date = try {
         LocalDate.parse(dateText)
     } catch (_: DateTimeParseException) {
-        return reject(
-            SessionParseFailure.NonexistentDate(dateText)
-        )
+        return fail(SessionParseFailure.InvalidDate(dateText))
     }
+
 
     val type = SessionType.entries.firstOrNull { it.name == typeText }
-        ?: return reject(SessionParseFailure.UnknownType(typeText))
+        ?: return fail(SessionParseFailure.UnknownType(typeText))
 
-    findTextFailure(topic, TextField.TOPIC)?.let {
-        return reject(it)
+    val teachers = teachersText.split(',')
+
+    if (type == SessionType.EXAM) {
+        val validTeachers = teachers.filter { teacher ->
+            teacher.isNotBlank() &&
+                    teacher.trim() == teacher &&
+                    teacher.none { it.isISOControl() } &&
+                    teacher != "-"
+        }
+
+        if (validTeachers.size < 2) {
+            return fail(
+                SessionParseFailure.TooFewDistinctTeachers(
+                    minimum = 2,
+                    actual = validTeachers.size,
+                )
+            )
+        }
     }
+
+
+    findControlCharacterFailure(
+        date = dateText,
+        type = typeText,
+        topic = topic,
+        location = location,
+        teachers = teachers,
+    )?.let {
+        return fail(it)
+    }
+
+    findOuterWhitespaceFailure(
+        date = dateText,
+        type = typeText,
+        topic = topic,
+        location = location,
+        teachers = teachers,
+    )?.let {
+        return fail(it)
+    }
+
 
     if (type == SessionType.CANCELLED) {
         if (location != "-") {
-            return reject(
-                SessionParseFailure.CancelledLocationMustBeDash
-            )
+            return fail(SessionParseFailure.CancelledLocationMustBeDash)
         }
 
         if (teachersText != "-") {
-            return reject(
-                SessionParseFailure.CancelledTeachersMustBeDash
-            )
+            return fail(SessionParseFailure.CancelledTeachersMustBeDash)
         }
 
         return SessionParseResult.Success(
@@ -141,50 +153,27 @@ fun parseSessionLine(
         )
     }
 
-    findTextFailure(
-        value = location,
-        field = TextField.LOCATION,
-        forbidDash = true,
-    )?.let {
-        return reject(it)
-    }
-
-    val teachers = if (teachersText.isEmpty()) {
-        emptyList()
-    } else {
-        teachersText.split(',')
+    if (location == "-") {
+        return fail(SessionParseFailure.ActiveLocationMustNotBeDash)
     }
 
     for ((index, teacher) in teachers.withIndex()) {
-        findTextFailure(
-            value = teacher,
-            field = TextField.TEACHER,
-            forbidDash = true,
-            teacherIndex = index + 1,
-        )?.let {
-            return reject(it)
+        val violation = teacherViolation(teacher)
+        if (violation != null) {
+            return fail(
+                SessionParseFailure.InvalidTeacher(
+                    teacherIndex = index + 1,
+                    reason = violation,
+                )
+            )
         }
     }
 
     val seen = mutableSetOf<String>()
-
     for (teacher in teachers) {
         if (!seen.add(teacher)) {
-            return reject(
-                SessionParseFailure.DuplicateTeacher(teacher)
-            )
+            return fail(SessionParseFailure.DuplicateTeacher(teacher))
         }
-    }
-
-    val minimum = if (type == SessionType.EXAM) 2 else 1
-
-    if (teachers.size < minimum) {
-        return reject(
-            SessionParseFailure.TooFewTeachers(
-                minimum = minimum,
-                actual = teachers.size,
-            )
-        )
     }
 
     val session = when (type) {
@@ -217,23 +206,76 @@ fun parseSessionLine(
     return SessionParseResult.Success(session)
 }
 
-private fun findTextFailure(
-    value: String,
-    field: TextField,
-    forbidDash: Boolean = false,
-    teacherIndex: Int? = null,
-): SessionParseFailure.InvalidText? {
-    val violation = when {
-        value.isBlank() -> TextViolation.BLANK
-        value != value.trim() -> TextViolation.OUTER_WHITESPACE
-        value.any { it.isISOControl() } -> TextViolation.CONTROL_CHARACTER
-        forbidDash && value == "-" -> TextViolation.MISSING_VALUE
-        else -> return null
+private fun findControlCharacterFailure(
+    date: String,
+    type: String,
+    topic: String,
+    location: String,
+    teachers: List<String>,
+): SessionParseFailure? {
+    if (date.any { it.isISOControl() }) {
+        return SessionParseFailure.ControlCharacter(TextField.DATE)
+    }
+    if (type.any { it.isISOControl() }) {
+        return SessionParseFailure.ControlCharacter(TextField.TYPE)
+    }
+    if (topic.any { it.isISOControl() }) {
+        return SessionParseFailure.ControlCharacter(TextField.TOPIC)
+    }
+    if (location.any { it.isISOControl() }) {
+        return SessionParseFailure.ControlCharacter(TextField.LOCATION)
     }
 
-    return SessionParseFailure.InvalidText(
-        field = field,
-        violation = violation,
-        teacherIndex = teacherIndex,
-    )
+    teachers.forEachIndexed { index, teacher ->
+        if (teacher.any { it.isISOControl() }) {
+            return SessionParseFailure.ControlCharacter(
+                field = TextField.TEACHERS,
+                teacherIndex = index + 1,
+            )
+        }
+    }
+
+    return null
 }
+
+private fun findOuterWhitespaceFailure(
+    date: String,
+    type: String,
+    topic: String,
+    location: String,
+    teachers: List<String>,
+): SessionParseFailure? {
+    if (date != date.trim()) {
+        return SessionParseFailure.OuterWhitespace(TextField.DATE)
+    }
+    if (type != type.trim()) {
+        return SessionParseFailure.OuterWhitespace(TextField.TYPE)
+    }
+    if (topic != topic.trim()) {
+        return SessionParseFailure.OuterWhitespace(TextField.TOPIC)
+    }
+    if (location != location.trim()) {
+        return SessionParseFailure.OuterWhitespace(TextField.LOCATION)
+    }
+
+    teachers.forEachIndexed { index, teacher ->
+        if (teacher != teacher.trim()) {
+            return SessionParseFailure.OuterWhitespace(
+                field = TextField.TEACHERS,
+                teacherIndex = index + 1,
+            )
+        }
+    }
+
+    return null
+}
+
+private fun teacherViolation(teacher: String): TeacherViolation? = when {
+    teacher.isBlank() -> TeacherViolation.BLANK
+    teacher != teacher.trim() -> TeacherViolation.OUTER_WHITESPACE
+    teacher.any { it.isISOControl() } -> TeacherViolation.CONTROL_CHARACTER
+    teacher == "-" -> TeacherViolation.DASH
+    else -> null
+}
+
+
