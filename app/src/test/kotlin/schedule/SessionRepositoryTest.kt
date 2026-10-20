@@ -3,6 +3,7 @@ package schedule
 import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class SessionRepositoryTest {
     private val date = LocalDate.of(2026, 10, 12)
@@ -36,6 +37,17 @@ class SessionRepositoryTest {
     }
 
     @Test
+    fun addAllowsDuplicateSessions() {
+        val repository = InMemorySessionRepository()
+        val session = lecture("Physics")
+
+        repository.add(session)
+        repository.add(session)
+
+        assertEquals(listOf(session, session), repository.all())
+    }
+
+    @Test
     fun allReturnsIndependentSnapshot() {
         val repository = InMemorySessionRepository()
         val session = lecture("Physics")
@@ -55,8 +67,12 @@ class SessionRepositoryTest {
         val session = lecture("Physics")
 
         repository.add(session)
-        val snapshot: List<Session> = repository.all()
+        val snapshot = repository.all()
 
         assertEquals(listOf(session), snapshot)
+        assertFailsWith<UnsupportedOperationException> {
+            (snapshot as MutableList<Session>).add(session)
+        }
+        assertEquals(listOf(session), repository.all())
     }
 }

@@ -1,4 +1,5 @@
 package schedule
+import java.util.Collections
 
 interface SessionRepository {
     fun add(session: Session)
@@ -17,5 +18,5 @@ class InMemorySessionRepository : SessionRepository {
         sessions.addAll(newSessions)
     }
 
-    override fun all(): List<Session> = sessions.toList()
+    override fun all(): List<Session> = Collections.unmodifiableList(sessions.toList())
 }
