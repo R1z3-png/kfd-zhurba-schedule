@@ -216,6 +216,7 @@ val exam = Assessment(date, "Physics", "Room 1", listOf("Alice", "Bob"))
 ```kotlin
 val date = LocalDate.of(2026, 10, 12)
 ```
+часть тестов в SessionTest написан только для Assessment, так как другие дата классы явно повторяют структуру защиты. Правильнее написать тесты для всех дата классов, но в рамках лабы опустим этот момент.
 
 ### 1. Создать занятие с пустой темой
 
@@ -278,7 +279,9 @@ check(exam.teachers == listOf("Alice", "Bob"))
 
 ### 7. Изменить состояние занятия через выданный список
 
-Обычный вызов `exam.teachers.clear()` не компилируется, поскольку тип свойства — `List<String>`. Но этого недостаточно для полной защиты.
+Обычный вызов `exam.teachers.clear()` не компилируется, поскольку тип свойства — `List<String>`.
+Однако этого недостаточно для полной защиты: статический тип не гарантирует, что объект под ним
+действительно запрещает мутацию.
 
 Дополнительная проверка для Kotlin/JVM:
 
@@ -289,12 +292,39 @@ exposed.clear()
 check(exam.teachers.isEmpty()) // При изменяемом backing list инвариант нарушен.
 ```
 
-Текущее устройство не гарантирует запрета такой мутации. Нужна защита выдаваемой коллекции, а не повторный `require` только при создании.
+Чтобы закрыть эту возможность, `Assessment` хранит не результат `toList()` напрямую,
+а его неизменяемую обёртку:
 
-Существующий `returnedTeachersListKeepsAssessment` написан в соответствии с требованием задания и 
-только получает `List<String>` и сравнивает его содержимое. 
-Он не вызывает мутирующих операций и не доказывает устойчивость к приведению типа. Пример выше — дополнительная проверка.
+```kotlin
+teachers = Collections.unmodifiableList(teachers.toList())
+```
 
+Сначала `toList()` создаёт независимую копию переданной коллекции, поэтому последующие изменения
+исходного списка не влияют на занятие. Затем `Collections.unmodifiableList` возвращает read-only view:
+любая попытка `add`, `remove`, `set` или `clear` через приведение к `MutableList` завершается
+`UnsupportedOperationException`.
+
+Таким образом, защита реализована на уровне выданной коллекции, а не только при создании объекта:
+
+```kotlin
+val assessment = Assessment(
+   date = date,
+   topic = "Topic 2",
+   place = "Mgtu",
+   teachers = listOf("Ivanov", "Petrov"),
+)
+
+val returned_assessment: List<String> = assessment.teachers
+
+assertEquals(listOf("Ivanov", "Petrov"), returned_assessment)
+assertFailsWith<UnsupportedOperationException> {
+   (returned_assessment as MutableList<String>).add("Sidorov")
+}
+```
+
+Тест `returnedTeachersListKeepsAssessment` проверяет именно этот сценарий: он получает публичное
+свойство `teachers`, пытается привести его к `MutableList<String>` и изменить содержимое.
+Ожидаемое поведение — `UnsupportedOperationException`, а не изменение состояния `Assessment`.
 ### 8. Обойти проверки через copy
 
 ```kotlin

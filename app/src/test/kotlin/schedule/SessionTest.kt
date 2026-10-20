@@ -19,7 +19,7 @@ class SessionTest {
             place = "Mephi",
             teachers = names,
         )
-        names.clear() // После создания занятия изменение переданного списка не должно менять объект
+        names.clear()
         // У созданной сдачи по-прежнему должны остаться два преподавателя.
 
         assertEquals(listOf("Ivanov", "Petrov"), assessment.teachers)
@@ -34,9 +34,12 @@ class SessionTest {
             teachers = listOf("Ivanov", "Petrov"),
         )
 
-        val returned: List<String> = assessment.teachers
+        val returned_assessment: List<String> = assessment.teachers
 
-        assertEquals(listOf("Ivanov", "Petrov"), returned)
+        assertEquals(listOf("Ivanov", "Petrov"), returned_assessment)
+        assertFailsWith<UnsupportedOperationException> {
+            (returned_assessment as MutableList<String>).add("Sidorov")
+        }
     }
 
     @Test
@@ -46,6 +49,44 @@ class SessionTest {
         }
         assertFailsWith<IllegalArgumentException> {
             Assessment(date = date, topic = "   ", place = "Mephi", teachers = listOf("Ivanov", "Petrov"))
+        }
+    }
+
+    @Test
+    fun blankPlaceRejected() {
+        assertFailsWith<IllegalArgumentException> {
+            Assessment(date = date, topic = "VTA", place = "", teachers = listOf("Ivanov", "Petrov"))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            Assessment(date = date, topic = "VTA", place = "   ", teachers = listOf("Ivanov", "Petrov"))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            Assessment(date = date, topic = "VTA", place = "-", teachers = listOf("Ivanov", "Petrov"))
+        }
+    }
+
+    @Test
+    fun whitespaceAndControlCharactersAreRejected() {
+        assertFailsWith<IllegalArgumentException> {
+            Assessment(date = date, topic = " Topic", place = "Mephi", teachers = listOf("Ivanov", "Petrov"),)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            Assessment(date = date, topic = "Topic ", place = "Mephi", teachers = listOf("Ivanov", "Petrov"),)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            Assessment(date = date, topic = "Topic", place = " Mephi", teachers = listOf("Ivanov", "Petrov"),)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            Assessment(date = date, topic = "Topic", place = "Mephi", teachers = listOf("Ivanov", " Petrov"),)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            Assessment(date = date, topic = "Topic\n", place = "Mephi", teachers = listOf("Ivanov", "Petrov"),)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            Assessment(date = date, topic = "Topic", place = "Mephi\t", teachers = listOf("Ivanov", "Petrov"),)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            Assessment(date = date, topic = "Topic", place = "Mephi", teachers = listOf("Ivanov", "Petrov\r"),)
         }
     }
 
@@ -69,6 +110,9 @@ class SessionTest {
         assertFailsWith<IllegalArgumentException> {
             Assessment(date = date, topic = "Topic 3", place = "Mephi", teachers = listOf("",""))
         }
+        assertFailsWith<IllegalArgumentException> {
+            Assessment(date = date, topic = "Topic 3", place = "Mephi", teachers = listOf("-","-"))
+        }
     }
 
     @Test
@@ -86,5 +130,17 @@ class SessionTest {
         assertFailsWith<IllegalArgumentException> {
             Assessment(date = date, topic = "Topic 3", place = "Mephi", teachers = listOf("Ivanov", "Ivanov"))
         }
+    }
+
+    @Test
+    fun teacherNamesAreCaseSensitive() {
+        val assessment = Assessment(
+            date = date,
+            topic = "Topic 3",
+            place = "Mephi",
+            teachers = listOf("Ivanov", "IVANOV"),
+        )
+
+        assertEquals(listOf("Ivanov", "IVANOV"), assessment.teachers)
     }
 }

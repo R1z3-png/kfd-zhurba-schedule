@@ -1,5 +1,6 @@
 package schedule
 import java.time.LocalDate
+import java.util.Collections
 
 private fun requireValidTopic(topic: String) {
     requireValidText(topic, "Topic")
@@ -21,12 +22,14 @@ private fun requireValidTeachers(teachers: List<String>, minimumCount: Int) {
         requireValidText(teacher, "Teacher name at index $index")
         require(teacher != "-") {"Teacher name at index $index must not be '-'"}
     }
+    // forEachIndexed дает индекс элемента и сам элемент
 }
 
 private fun requireValidText(value: String, field: String) {
     require(value.isNotBlank()) { "$field must not be blank" }
     require(value == value.trim()) {"$field must not have leading or trailing whitespace"}
     require(value.none { it.isISOControl() }) {"$field must not contain control characters"}
+    // .none вернет true если ни для одного элемента предикат не вернул true
 }
 
 sealed interface Session {
@@ -34,7 +37,9 @@ sealed interface Session {
     val topic: String
 }
 
-data class Lecture(
+// copy() имеет ту же видимость что и основной конструктор
+@ConsistentCopyVisibility
+data class Lecture private constructor(
     override val date: LocalDate,
     override val topic: String,
     val place: String,
@@ -45,10 +50,22 @@ data class Lecture(
         requireValidTopic(topic)
         requireValidPlace(place)
         requireValidTeachers(teachers, minimumCount = 1)
+    }
+    companion object {
+        operator fun invoke(
+            date: LocalDate,
+            topic: String,
+            place: String,
+            teachers: List<String>,
+        ): Lecture = Lecture(date = date,
+            topic = topic,
+            place = place,
+            teachers = Collections.unmodifiableList(teachers.toList()))
     }
 }
 
-data class Practice(
+@ConsistentCopyVisibility
+data class Practice private constructor(
     override val date: LocalDate,
     override val topic: String,
     val place: String,
@@ -60,7 +77,19 @@ data class Practice(
         requireValidPlace(place)
         requireValidTeachers(teachers, minimumCount = 1)
     }
+    companion object {
+        operator fun invoke(
+            date: LocalDate,
+            topic: String,
+            place: String,
+            teachers: List<String>,
+        ): Practice = Practice(date = date,
+            topic = topic,
+            place = place,
+            teachers = Collections.unmodifiableList(teachers.toList()))
+    }
 }
+
 
 @ConsistentCopyVisibility
 data class Assessment private constructor(
@@ -86,10 +115,11 @@ data class Assessment private constructor(
             date = date,
             topic = topic,
             place = place,
-            teachers = teachers.toList(),
+            teachers = Collections.unmodifiableList(teachers.toList()),
         )
     }
 }
+
 
 data class Cancellation(
     override val date: LocalDate,
