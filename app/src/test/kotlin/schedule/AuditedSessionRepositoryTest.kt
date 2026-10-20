@@ -63,4 +63,26 @@ class AuditedSessionRepositoryTest {
 
         assertEquals(listOf(AuditEvent("add", 1)), repository.auditEvents)
     }
+
+    @Test
+    fun delegateCallsDoNotCreateAdditionalAuditEvents() {
+        val innerRepository = InMemorySessionRepository()
+        val repository = AuditedSessionRepository(innerRepository)
+
+        val first = lecture("Physics")
+        val second = lecture("VTA")
+
+        repository.add(first)
+        innerRepository.add(second) // выполняем мимо обертки
+        repository.addAll(listOf(first, second))
+
+        assertEquals(listOf(
+            AuditEvent("add", 1),
+            AuditEvent("addAll", 2),
+            ),
+            repository.auditEvents,
+        )
+        assertEquals(3, repository.totalAdded)
+        assertEquals(listOf(first, second, first, second), repository.all())
+    }
 }
