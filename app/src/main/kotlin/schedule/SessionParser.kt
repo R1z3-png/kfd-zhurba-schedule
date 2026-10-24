@@ -5,30 +5,31 @@ import java.time.format.DateTimeParseException
 
 sealed interface SessionParseResult {
     data class Success(val session: Session) : SessionParseResult
-
     data class Failure(val lineNumber: Long, val reason: SessionParseFailure) : SessionParseResult
 }
 
 sealed interface SessionParseFailure {
     data object NoFieldSeparator : SessionParseFailure
+    data class WrongFieldCount(val actual: Int) : SessionParseFailure
+    data class BlankField(val field: TextField) : SessionParseFailure
+
+    data class InvalidDate(val value: String) : SessionParseFailure
+    data class UnknownType(val value: String) : SessionParseFailure
+
     data object CancelledLocationMustBeDash : SessionParseFailure
     data object CancelledTeachersMustBeDash : SessionParseFailure
     data object ActiveLocationMustNotBeDash : SessionParseFailure
 
-    data class WrongFieldCount(val actual: Int) : SessionParseFailure
-    data class BlankField(val field: TextField) : SessionParseFailure
-    data class InvalidDate(val value: String) : SessionParseFailure
-
-
-    data class UnknownType(val value: String) : SessionParseFailure
-    data class TooFewDistinctTeachers(
-        val minimum: Int,
-        val actual: Int,
-    ) : SessionParseFailure
     data class ControlCharacter(val field: TextField, val teacherIndex: Int? = null) :
         SessionParseFailure
     data class OuterWhitespace(val field: TextField, val teacherIndex: Int? = null) :
         SessionParseFailure
+
+    data class TooFewDistinctTeachers(
+        val minimum: Int,
+        val actual: Int,
+    ) : SessionParseFailure
+
     data class InvalidTeacher(val teacherIndex: Int, val reason: TeacherViolation) :
         SessionParseFailure
     data class DuplicateTeacher(val name: String) : SessionParseFailure
@@ -49,7 +50,7 @@ enum class TeacherViolation {
     DASH,
 }
 
-private val datePattern = Regex("[0-9]{4}-[0-9]{2}-[0-9]{2}")
+private val datePattern = Regex("[0-9]{4}-[0-9]{2}-[0-9]{2}") // regex - так выглядят регулярные выражения в котлине
 
 fun parseSessionLine(lineNumber: Long, line: String): SessionParseResult {
     fun fail(reason: SessionParseFailure) =
@@ -64,6 +65,8 @@ fun parseSessionLine(lineNumber: Long, line: String): SessionParseResult {
     }
 
     val (dateText, typeText, topic, location, teachersText) = fields
+
+    // to - инфиксная функция, создают пару поля и строки, в этом поле
     val blankField = sequenceOf(TextField.DATE to dateText,
         TextField.TYPE to typeText,
         TextField.TOPIC to topic,
@@ -79,18 +82,20 @@ fun parseSessionLine(lineNumber: Long, line: String): SessionParseResult {
         return fail(SessionParseFailure.InvalidDate(dateText))
     }
 
+    // берем год из даты
     val year = dateText.substring(0, 4).toInt()
     if (year !in 1..9999) {
         return fail(SessionParseFailure.InvalidDate(dateText))
     }
 
+    // LocalDate.parse бросает DateTimeParseException при неудачной попытке перевода / невалидной дате
     val date = try {
         LocalDate.parse(dateText)
     } catch (_: DateTimeParseException) {
         return fail(SessionParseFailure.InvalidDate(dateText))
     }
 
-
+    // SessionType.entries - список всех значений enum
     val type = SessionType.entries.firstOrNull { it.name == typeText }
         ?: return fail(SessionParseFailure.UnknownType(typeText))
 
@@ -100,7 +105,6 @@ fun parseSessionLine(lineNumber: Long, line: String): SessionParseResult {
         val validTeachers = teachers.filter { teacher ->
             teacher.isNotBlank() &&
                     teacher.trim() == teacher &&
-                    teacher.none { it.isISOControl() } &&
                     teacher != "-"
         }
 
@@ -198,9 +202,6 @@ fun parseSessionLine(lineNumber: Long, line: String): SessionParseResult {
             teachers = teachers,
         )
 
-        SessionType.CANCELLED -> error(
-            "Cancelled session must be handled before active sessions"
-        )
     }
 
     return SessionParseResult.Success(session)

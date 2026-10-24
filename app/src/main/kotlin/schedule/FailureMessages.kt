@@ -21,45 +21,32 @@ private fun escapeValue(value: String): String =
 
 fun formatFailureReason(reason: SessionParseFailure): String =
     when (reason) {
-        SessionParseFailure.NoFieldSeparator ->
-            "invalid field separator"
+        SessionParseFailure.NoFieldSeparator -> "invalid field separator"
 
-        is SessionParseFailure.WrongFieldCount ->
-            "got ${reason.actual} fields, expected 5"
+        is SessionParseFailure.WrongFieldCount -> "got ${reason.actual} fields, expected 5"
 
-        is SessionParseFailure.BlankField ->
-            "empty required field \"${fieldName(reason.field)}\""
+        is SessionParseFailure.BlankField -> "empty required field \"${fieldName(reason.field)}\""
 
-        is SessionParseFailure.InvalidDate ->
-            "invalid date \"${escapeValue(reason.value)}\""
+        is SessionParseFailure.InvalidDate -> "invalid date \"${escapeValue(reason.value)}\""
 
-        is SessionParseFailure.UnknownType ->
-            "unknown session type \"${escapeValue(reason.value)}\""
+        is SessionParseFailure.UnknownType -> "unknown session type \"${escapeValue(reason.value)}\""
 
-        is SessionParseFailure.TooFewDistinctTeachers ->
-            "type \"EXAM\" requires at least ${reason.minimum} teachers, " +
+        is SessionParseFailure.TooFewDistinctTeachers -> "type \"EXAM\" requires at least ${reason.minimum} teachers, " +
                     "got ${reason.actual}"
 
-        is SessionParseFailure.ControlCharacter ->
-            "${fieldName(reason.field)} must not contain control characters"
+        is SessionParseFailure.ControlCharacter -> "${fieldName(reason.field)} must not contain control characters"
 
-        is SessionParseFailure.OuterWhitespace ->
-            "${fieldName(reason.field)} must not have leading or trailing whitespace"
+        is SessionParseFailure.OuterWhitespace -> "${fieldName(reason.field)} must not have leading or trailing whitespace"
 
-        SessionParseFailure.CancelledLocationMustBeDash ->
-            "type \"CANCELLED\" requires location \"-\""
+        SessionParseFailure.CancelledLocationMustBeDash -> "type \"CANCELLED\" requires location \"-\""
 
-        SessionParseFailure.CancelledTeachersMustBeDash ->
-            "type \"CANCELLED\" requires teachers \"-\""
+        SessionParseFailure.CancelledTeachersMustBeDash -> "type \"CANCELLED\" requires teachers \"-\""
 
-        SessionParseFailure.ActiveLocationMustNotBeDash ->
-            "location must not be \"-\""
+        SessionParseFailure.ActiveLocationMustNotBeDash -> "location must not be \"-\""
 
-        is SessionParseFailure.InvalidTeacher ->
-            teacherMessage(reason)
+        is SessionParseFailure.InvalidTeacher -> teacherMessage(reason)
 
-        is SessionParseFailure.DuplicateTeacher ->
-            "duplicate teacher \"${escapeValue(reason.name)}\""
+        is SessionParseFailure.DuplicateTeacher -> "duplicate teacher \"${escapeValue(reason.name)}\""
     }
 
 
@@ -74,24 +61,6 @@ private fun fieldName(field: TextField): String =
         TextField.LOCATION -> "location"
         TextField.TEACHERS -> "teachers"
     }
-
-private fun controlCharacterMessage(
-    reason: SessionParseFailure.ControlCharacter,
-): String {
-    val field = fieldName(reason.field)
-    val label = teacherLabel(reason.teacherIndex, field)
-
-    return "$label must not contain control characters"
-}
-
-private fun outerWhitespaceMessage(
-    reason: SessionParseFailure.OuterWhitespace,
-): String {
-    val field = fieldName(reason.field)
-    val label = teacherLabel(reason.teacherIndex, field)
-
-    return "$label must not have leading or trailing whitespace"
-}
 
 private fun teacherMessage(
     reason: SessionParseFailure.InvalidTeacher,
@@ -112,9 +81,3 @@ private fun teacherMessage(
             "$label must not be \"-\""
     }
 }
-
-private fun teacherLabel(
-    teacherIndex: Int?,
-    field: String,
-): String =
-    if (teacherIndex == null) field else "teacher #$teacherIndex"
