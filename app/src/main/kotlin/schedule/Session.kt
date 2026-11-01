@@ -12,7 +12,7 @@ private fun requireValidDate(date: LocalDate) {
 
 private fun requireValidPlace(place: String) {
     requireValidText(place, "Place")
-    require(place != "-") { "Place must not be '-'" }
+    require(place != "-") { "Place can not be '-'" }
 }
 
 private fun requireValidTeachers(teachers: List<String>, minimumCount: Int) {
